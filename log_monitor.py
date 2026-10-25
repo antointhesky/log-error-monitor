@@ -30,3 +30,51 @@ def parse_line(line):
     if entry["level"] not in LEVELS:
         return None
     return entry
+
+import re
+from collections import Counter   
+ERROR_LEVELS = ("ERROR", "CRITICAL", "FATAL")
+def normalise(message):
+    """Replace numbers and hex IDs so similar errors group together."""
+    message = re.sub(r"0x[0-9a-fA-F]+", "<hex>", message)
+    message = re.sub(r"\d+", "<n>", message)
+    return message
+
+
+def analyse(lines):
+    """Read an iterable of lines and return summary statistics."""
+    levels = Counter()
+    error_messages = Counter()
+    error_components = Counter()
+    errors_per_minute = Counter()
+    malformed = 0
+    total = 0
+
+    for line in lines:
+        if not line.strip():
+            continue
+        total += 1
+        entry = parse_line(line)
+        if entry is None:
+            malformed += 1
+            continue
+        levels[entry["level"]] += 1
+        if entry["level"] in ERROR_LEVELS:
+            error_messages[normalise(entry["message"])] += 1
+            error_components[entry["component"]] += 1
+            minute = f'{entry["date"]} {entry["time"][:5]}'
+            errors_per_minute[minute] += 1
+
+    return {
+        "total": total,
+        "malformed": malformed,
+        "levels": levels,
+        "error_messages": error_messages,
+        "error_components": error_components,
+        "errors_per_minute": errors_per_minute,
+    }
+
+
+def count_errors(stats):
+    """Total number of ERROR, CRITICAL and FATAL lines."""
+    return sum(stats["levels"][level] for level in ERROR_LEVELS)
